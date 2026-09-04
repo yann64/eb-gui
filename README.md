@@ -7,12 +7,17 @@ universal, cross-toolkit `Application`/`Window` API, managed with `ebpm`.
 
 Phase 1: `Application`/`Window` only. Two real backend adapters exist:
 [`eb-gui-gtk4`](https://github.com/yann64/eb-gui-gtk4) and
-[`eb-gui-qt6`](https://github.com/yann64/eb-gui-qt6). Haiku and Win32
-adapters are a planned follow-on (Haiku needs real prerequisite work in
-`eb-haiku` first - window move/resize/title aren't bound there yet
-despite `BWindow` supporting all three natively; Win32 has no eBasic
-binding at all yet). Menu, toolbar, statusbar, timer, and the
-widget/layout-with-constraints system are a separate, later phase.
+[`eb-gui-qt6`](https://github.com/yann64/eb-gui-qt6), each with a
+near-identical `examples/hello_window.bas` (same calls, differing only
+in the `#include` target and two string literals) - this project's own
+cross-backend proof, both screenshot-verified live producing the same
+behavior, plus a per-adapter headless `examples/verify` exercising
+every contract function. Haiku and Win32 adapters are a planned
+follow-on (Haiku needs real prerequisite work in `eb-haiku` first -
+window move/resize/title aren't bound there yet despite `BWindow`
+supporting all three natively; Win32 has no eBasic binding at all yet).
+Menu, toolbar, statusbar, timer, and the widget/layout-with-constraints
+system are a separate, later phase.
 
 ## Why this package is just two `TYPE`s
 
