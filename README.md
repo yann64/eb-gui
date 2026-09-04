@@ -29,15 +29,32 @@ native window decorations) - so a *separate*, BWindow-native
 running on Haiku; it would only matter for apps that want to avoid a
 GTK4/Qt6 runtime dependency in favor of Haiku's own native toolkit, a
 narrower motivation than originally assumed when Haiku support was
-scoped as a from-scratch adapter. A real BWindow-native adapter is
-still a possible future track on that narrower motivation (would need
-prerequisite work in `eb-haiku` first - window move/resize/title aren't
-bound there yet despite `BWindow` supporting all three natively). Win32
-has no eBasic binding at all yet, so that adapter remains unstarted
-regardless. The widget/layout-with-constraints system is a separate,
-later phase.
+scoped as a from-scratch adapter. **A native BWindow adapter was built
+anyway** (the user's own choice, on that narrower motivation):
+[`eb-gui-haiku`](https://github.com/yann64/eb-gui-haiku), needing zero
+native code of its own - all prerequisite work landed in `eb-haiku`
+itself. Three real backend adapters now exist and are all published.
+Win32 has no eBasic binding at all yet, so that adapter remains
+unstarted.
 
-## Why this package is just two `TYPE`s
+**Widgets and layout (Round 1)**: `GuiButton`/`GuiLabel`/`GuiEntry` +
+`GuiBox`/`GuiGrid`, the lowest-common-denominator already real on all
+three backends (create, append/attach-with-span, whole-layout
+spacing) - the one piece of the user's original request left after the
+three adapters existed. **Deliberately no expand/fill/weight/alignment/
+min-max constraints yet** - real investigation (not assumed) found
+`eb-haiku` already has a rich per-view constraint model
+(`HViewSetExplicitMinSize`/`MaxSize`/`PreferredSize`/`Alignment`, plus
+per-item/per-column/per-row weight), but GTK4 and Qt6 have **no
+binding for any of this at all** (`hexpand`/`vexpand`/`halign`/`valign`
+don't exist in `eb-gtk4`'s raw layer; `eb-qt6` has no stretch factor,
+alignment-in-layout, or `QSizePolicy` binding) - a "constraints"
+contract today would silently do nothing on two of three backends, so
+that's a separate, later round needing real prerequisite native work
+in both. CheckBox/RadioButton/ComboBox are a similar three-way gap
+(rich on Qt6, absent on GTK4 and Haiku) deferred the same way.
+
+## Why this package is just plain-data `TYPE`s, no polymorphism
 
 **Correction (this README originally claimed eBasic has no virtual
 methods at all - wrong, found via a case-sensitive grep that missed the
@@ -50,8 +67,9 @@ breaks the plain-data/standard-layout requirement for crossing an
 *rejects* a `UserDefined` TYPE with a constructor, destructor, or
 virtual method used as a parameter/return type on such a boundary
 (confirmed in the compiler's own M4-era implementation notes). Since
-`eb-gui`, `eb-gui-gtk4`, and `eb-gui-qt6` are three separately-compiled
-`--lib` archives, a virtual-dispatch-based shared interface could never
+`eb-gui`, `eb-gui-gtk4`, `eb-gui-qt6`, and `eb-gui-haiku` are all
+separately-compiled `--lib` archives, a virtual-dispatch-based shared
+interface could never
 span them regardless of the language supporting virtual dispatch
 in general. Combined with each toolkit's native library being a
 separate runtime dependency you'd never want to link all of into one
@@ -215,7 +233,94 @@ SUB GuiActionTrigger(a AS GuiAction)
 ' "exactly one, shared" is the lowest common shape).
 FUNCTION GuiWindowToolBar(win AS GuiWindow) AS GuiToolBar
 FUNCTION GuiToolBarAddAction(bar AS GuiToolBar, text AS ZSTRING) AS GuiAction
+
+TYPE GuiButton
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiLabel
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiEntry
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiBox
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiGrid
+    handle AS ANY PTR
+END TYPE
+
+FUNCTION NewGuiButton(text AS ZSTRING) AS GuiButton
+SUB GuiButtonSetText(b AS GuiButton, text AS ZSTRING)
+FUNCTION GuiButtonGetText(b AS GuiButton) AS ZSTRING
+' handler is SUB(userData AS ANY PTR).
+SUB GuiButtonConnectClicked(b AS GuiButton, handler AS ANY PTR, userData AS ANY PTR)
+
+FUNCTION NewGuiLabel(text AS ZSTRING) AS GuiLabel
+SUB GuiLabelSetText(l AS GuiLabel, text AS ZSTRING)
+
+FUNCTION NewGuiEntry(text AS ZSTRING) AS GuiEntry
+SUB GuiEntrySetText(e AS GuiEntry, text AS ZSTRING)
+FUNCTION GuiEntryGetText(e AS GuiEntry) AS ZSTRING
+' handler is SUB(userData AS ANY PTR) - no text param passed (real
+' per-keystroke "changed" signals disagree too much across backends on
+' whether one exists at all/what it carries - call GuiEntryGetText
+' yourself from inside the handler instead).
+SUB GuiEntryConnectChanged(e AS GuiEntry, handler AS ANY PTR, userData AS ANY PTR)
+
+' orientation: 0 = horizontal, 1 = vertical.
+FUNCTION NewGuiBox(orientation AS INTEGER, spacing AS INTEGER) AS GuiBox
+' `child` is any other Gui* TYPE's own `.handle` (GuiButton/Label/Entry/
+' Box/Grid all interoperate as children of a GuiBox/GuiGrid).
+SUB GuiBoxAddChild(box AS GuiBox, child AS ANY PTR)
+
+FUNCTION NewGuiGrid() AS GuiGrid
+SUB GuiGridAttach(grid AS GuiGrid, child AS ANY PTR, column AS INTEGER, row AS INTEGER, columnSpan AS INTEGER, rowSpan AS INTEGER)
+
+' The window's own main content area - composes with StatusBar/MenuBar/
+' ToolBar, which already claim their own chrome regions (see each
+' adapter's own README for the exact interop mechanism and any
+' call-order convention it needs).
+SUB GuiWindowSetContent(win AS GuiWindow, content AS ANY PTR)
 ```
+
+## Widgets and layout (Round 1) - deliberately no constraints yet
+
+`GuiBox`/`GuiGrid` expose only what's ALREADY real on all three
+backends today: create, append/attach-with-span, whole-layout spacing.
+No expand/fill/weight/alignment/min-max-preferred-size parameters exist
+yet anywhere in this contract. Real investigation (not assumed) found
+`eb-haiku` already has a rich per-view constraint model
+(`HViewSetExplicitMinSize`/`MaxSize`/`PreferredSize`/`Alignment`, plus
+per-item/per-column/per-row weight) - but GTK4's raw layer has no
+`hexpand`/`vexpand`/`halign`/`valign` binding at all, and `eb-qt6` has
+no stretch factor, alignment-in-layout, or `QSizePolicy` binding
+either. A "constraints" contract today would silently do nothing on
+two of three backends - that's a separate, later round needing real
+prerequisite native work in both `eb-gtk4` and `eb-qt6` first, with
+`eb-haiku`'s own model anchoring the eventual shape.
+
+**Hiding a real nesting asymmetry in each adapter, not the contract**:
+GTK4's `Box`/`Grid` are real widgets and nest directly into each
+other. Qt6's `BoxLayout`/`GridLayout` and Haiku's `HGroupLayout`/
+`HGridLayout` are NOT widgets/views at all and need an intermediate
+holder (a plain widget/view with the layout applied to it) before they
+can be added as a child of another layout. `eb-gui-gtk4`'s
+`GuiBox.handle`/`GuiGrid.handle` are the real widget handles directly;
+`eb-gui-qt6`/`eb-gui-haiku` create the holder internally and return
+its handle instead, tracking the real underlying layout object
+separately - so from this contract's own perspective, a `GuiBox`/
+`GuiGrid` is always "a thing you can hand to `GuiBoxAddChild`/
+`GuiGridAttach`/`GuiWindowSetContent` uniformly," regardless of
+backend.
+
+CheckBox/RadioButton/ComboBox are a similar three-way asymmetry (rich
+on Qt6, entirely absent - both raw and idiomatic layers - on GTK4 and
+Haiku) and are deferred to their own later round for the same reason.
 
 ## Ownership and the quit model
 
@@ -262,5 +367,6 @@ the application is unchanged.
 
 - [`eb-gui-gtk4`](https://github.com/yann64/eb-gui-gtk4) - the GTK4 adapter.
 - [`eb-gui-qt6`](https://github.com/yann64/eb-gui-qt6) - the Qt6 adapter.
-- [`eb-gtk4`](https://github.com/yann64/eb-gtk4) / [`eb-qt6`](https://github.com/yann64/eb-qt6) -
-  the underlying toolkit bindings each adapter is built on.
+- [`eb-gui-haiku`](https://github.com/yann64/eb-gui-haiku) - the native Haiku BeAPI adapter.
+- [`eb-gtk4`](https://github.com/yann64/eb-gtk4) / [`eb-qt6`](https://github.com/yann64/eb-qt6) /
+  [`eb-haiku`](https://github.com/yann64/eb-haiku) - the underlying toolkit bindings each adapter is built on.

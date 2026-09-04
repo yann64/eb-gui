@@ -67,3 +67,23 @@ END TYPE
 TYPE GuiAction
     handle AS ANY PTR
 END TYPE
+
+TYPE GuiButton
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiLabel
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiEntry
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiBox
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiGrid
+    handle AS ANY PTR
+END TYPE
