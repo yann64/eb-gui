@@ -352,6 +352,24 @@ FUNCTION GuiComboBoxGetSelectedText(cb AS GuiComboBox) AS ZSTRING
 ' reasoning as GuiCheckBoxConnectToggled above - call
 ' GuiComboBoxGetSelectedIndex yourself from inside the handler instead.
 SUB GuiComboBoxConnectChanged(cb AS GuiComboBox, handler AS ANY PTR, userData AS ANY PTR)
+
+' --- Widget Round 5: ProgressBar, Slider ---
+FUNCTION NewGuiProgressBar() AS GuiProgressBar
+' On eb-gui-haiku, `min` is a documented no-op - real BStatusBar has no
+' min concept at all (always effectively 0).
+SUB GuiProgressBarSetRange(pb AS GuiProgressBar, min AS INTEGER, max AS INTEGER)
+FUNCTION GuiProgressBarGetValue(pb AS GuiProgressBar) AS INTEGER
+SUB GuiProgressBarSetValue(pb AS GuiProgressBar, value AS INTEGER)
+
+' orientation: 0 = horizontal, 1 = vertical (matches GuiBox's own convention).
+FUNCTION NewGuiSlider(orientation AS INTEGER) AS GuiSlider
+SUB GuiSliderSetRange(s AS GuiSlider, min AS INTEGER, max AS INTEGER)
+FUNCTION GuiSliderGetValue(s AS GuiSlider) AS INTEGER
+SUB GuiSliderSetValue(s AS GuiSlider, value AS INTEGER)
+' handler is SUB(userData AS ANY PTR) - no value param, same reasoning
+' as GuiCheckBoxConnectToggled above - call GuiSliderGetValue yourself
+' from inside the handler instead.
+SUB GuiSliderConnectValueChanged(s AS GuiSlider, handler AS ANY PTR, userData AS ANY PTR)
 ```
 
 ## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
@@ -470,6 +488,44 @@ through; `eb-gui-qt6` lazily creates and tracks a real `ButtonGroup`
 internally (same "hide the real object behind the scenes" pattern as
 `GuiBox`/`GuiGrid`'s own holder-widget design); `eb-gui-haiku` treats
 it as a documented no-op (grouping there is already automatic).
+
+## Widgets (Round 5) - ProgressBar, Slider
+
+`eb-qt6` again already had rich, working `ProgressBar`/`Slider`
+bindings; `eb-gtk4`/`eb-haiku` had nothing for either, needing real
+prerequisite native work (`GtkProgressBar`/`GtkScale`, `eb-gtk4`
+v0.14.0; `BStatusBar`/`BSlider`, `eb-haiku` v0.16.0).
+
+**A real semantic mismatch, handled rather than papered over**: real
+GTK4's `GtkProgressBar` has no integer min/max/value model at all,
+only a `0.0-1.0` double fraction. The contract keeps the richer,
+already-real integer min/max/value shape (matching Qt6/Haiku
+directly) - `eb-gui-gtk4` tracks each progress bar's own `(min, max,
+value)` in a small internal association table, computing the fraction
+for display and returning the tracked integer directly for
+`GetValue` (never re-deriving it from the lossy fraction). Real
+Haiku's `BStatusBar` has no minimum-value concept at all (always
+effectively `0`) - `GuiProgressBarSetRange`'s own `min` is a
+documented, accepted no-op on `eb-gui-haiku`, matching the "document
+the loss, don't block the feature" precedent already established for
+GTK4's own missing grid weight (Round 2) and missing max-size
+(Round 3).
+
+`GuiSliderConnectValueChanged`'s handler shape has no value param,
+same reasoning as `GuiEntryConnectChanged`/`GuiCheckBoxConnectToggled` -
+`eb-qt6`'s own real shim passes an extra value the contract doesn't
+declare (safe, ignored, same established ABI rule); `eb-gui-gtk4`
+reuses the Round 4 `eb_gui_gtk4_connect_userdata_signal` trampoline
+directly on `GtkRange`'s own `"value-changed"` signal, already
+correctly fixed to deliver only `userData`.
+
+Switch and Spinner/indeterminate-progress widgets were considered and
+explicitly excluded this round: Switch has no Qt6/Haiku equivalent at
+all and is functionally redundant with the already-shipped
+`GuiCheckBox`; Spinner has no real widget on Haiku's Interface Kit at
+all (real apps there fake indeterminate progress by looping
+`BStatusBar::Update()`) - a genuine 1-of-3 absence with no reasonable
+fallback.
 
 ## Ownership and the quit model
 

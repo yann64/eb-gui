@@ -109,3 +109,11 @@ END TYPE
 TYPE GuiComboBox
     handle AS ANY PTR
 END TYPE
+
+TYPE GuiProgressBar
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiSlider
+    handle AS ANY PTR
+END TYPE
