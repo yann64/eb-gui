@@ -309,6 +309,19 @@ SUB GuiGridAttachEx(grid AS GuiGrid, child AS ANY PTR, column AS INTEGER, row AS
 ' concept at all - a real absence in GTK4 itself, not a binding gap).
 SUB GuiGridSetColumnWeight(grid AS GuiGrid, column AS INTEGER, weight AS SINGLE)
 SUB GuiGridSetRowWeight(grid AS GuiGrid, row AS INTEGER, weight AS SINGLE)
+
+' --- Round 3: explicit min/max size ---
+' `handle` is any other Gui* TYPE's own `.handle` (same convention as
+' GuiBoxAddChild's own `child` param). width/height: pass -1 (or
+' whatever sentinel the underlying toolkit uses for "unset") to clear a
+' previously-set constraint where that's meaningful - passed straight
+' through, not reinterpreted by this contract.
+SUB GuiWidgetSetMinSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
+
+' A documented, accepted no-op on eb-gui-gtk4 - real GTK4 has no
+' generic per-widget maximum-size concept at all (confirmed absent
+' upstream, not a binding gap).
+SUB GuiWidgetSetMaxSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
 ```
 
 ## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
@@ -365,6 +378,34 @@ gap - it simply doesn't exist upstream), so `eb-gui-gtk4`'s
 `GuiGridSetColumnWeight`/`SetRowWeight` are a documented, accepted
 no-op, matching the Round 1 Action model's own "document the loss,
 don't block the feature" precedent.
+
+## Widgets and layout (Round 3) - explicit min/max size
+
+`GuiWidgetSetMinSize`/`SetMaxSize` needed **zero prerequisite native
+work** - unlike Rounds 1-2, every backing function this round needs
+already existed in `eb-gtk4`/`eb-qt6`/`eb-haiku` (`WidgetSetSizeRequest`/
+`WidgetSetMinimumSize`/`HViewSetExplicitMinSize` for min size;
+`WidgetSetMaximumSize`/`HViewSetExplicitMaxSize` for max size) - this
+round is pure contract + adapter wiring.
+
+`GuiWidgetSetMaxSize` is a documented, accepted no-op on `eb-gui-gtk4`:
+real GTK4 has no generic per-widget maximum-size API at all (confirmed
+via this project's own header inspection, not assumed) - only
+individual widget classes like `GtkLabel` have unrelated, narrower
+`max-width-chars`-style properties, nothing at the `GtkWidget` base
+level any widget could rely on uniformly.
+
+**Deliberately NOT included**: a settable "preferred size." Real
+Haiku's `HViewSetExplicitPreferredSize` genuinely overrides what its
+layout treats as preferred - but GTK4's `gtk_widget_measure`/`Qt6`'s
+`sizeHint()` are both **read-only queries** computed per-widget-type,
+not settable properties on the generic widget base. Approximating
+"preferred size" on those two backends via `SetMinSize`+`SetMaxSize`
+to the same value would silently change the semantics from "prefer
+this, but still allow flex within other constraints" to "force exactly
+this size" - a real, meaningful behavior difference, not a cosmetic
+one, so it's left out rather than shipped as a misleading
+approximation.
 
 ## Ownership and the quit model
 
