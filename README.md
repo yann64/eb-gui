@@ -286,23 +286,42 @@ SUB GuiGridAttach(grid AS GuiGrid, child AS ANY PTR, column AS INTEGER, row AS I
 ' adapter's own README for the exact interop mechanism and any
 ' call-order convention it needs).
 SUB GuiWindowSetContent(win AS GuiWindow, content AS ANY PTR)
+
+' --- Round 2: per-child constraints ---
+CONST GUI_ALIGN_FILL AS INTEGER = 0
+CONST GUI_ALIGN_START AS INTEGER = 1
+CONST GUI_ALIGN_CENTER AS INTEGER = 2
+CONST GUI_ALIGN_END AS INTEGER = 3
+
+' expand: relative growth weight along the box's own main axis
+' (0 = fixed size; >0 = grow). Only the ZERO/NONZERO distinction is
+' guaranteed everywhere - the MAGNITUDE is a real proportional ratio on
+' eb-gui-qt6/eb-gui-haiku but is otherwise ignored by eb-gui-gtk4
+' (GTK4 has no fractional-ratio expand, boolean only).
+' halign/valign: GUI_ALIGN_* - alignment within the child's own
+' allocated cell/slot on the axis(es) it isn't expanding to fill.
+SUB GuiBoxAddChildEx(box AS GuiBox, child AS ANY PTR, expand AS SINGLE, halign AS INTEGER, valign AS INTEGER)
+SUB GuiGridAttachEx(grid AS GuiGrid, child AS ANY PTR, column AS INTEGER, row AS INTEGER, columnSpan AS INTEGER, rowSpan AS INTEGER, halign AS INTEGER, valign AS INTEGER)
+
+' Per-column/row relative growth weight, independent of which
+' widget(s) occupy that column/row. Real on eb-gui-qt6/eb-gui-haiku; a
+' documented, accepted no-op on eb-gui-gtk4 (GtkGrid has no such
+' concept at all - a real absence in GTK4 itself, not a binding gap).
+SUB GuiGridSetColumnWeight(grid AS GuiGrid, column AS INTEGER, weight AS SINGLE)
+SUB GuiGridSetRowWeight(grid AS GuiGrid, row AS INTEGER, weight AS SINGLE)
 ```
 
-## Widgets and layout (Round 1) - deliberately no constraints yet
+## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
 
-`GuiBox`/`GuiGrid` expose only what's ALREADY real on all three
-backends today: create, append/attach-with-span, whole-layout spacing.
-No expand/fill/weight/alignment/min-max-preferred-size parameters exist
-yet anywhere in this contract. Real investigation (not assumed) found
-`eb-haiku` already has a rich per-view constraint model
+`GuiBox`/`GuiGrid` shipped first with only what was ALREADY real on all
+three backends: create, append/attach-with-span, whole-layout spacing.
+Real investigation (not assumed) found `eb-haiku` already had a rich
+per-view constraint model at the time
 (`HViewSetExplicitMinSize`/`MaxSize`/`PreferredSize`/`Alignment`, plus
-per-item/per-column/per-row weight) - but GTK4's raw layer has no
-`hexpand`/`vexpand`/`halign`/`valign` binding at all, and `eb-qt6` has
-no stretch factor, alignment-in-layout, or `QSizePolicy` binding
-either. A "constraints" contract today would silently do nothing on
-two of three backends - that's a separate, later round needing real
-prerequisite native work in both `eb-gtk4` and `eb-qt6` first, with
-`eb-haiku`'s own model anchoring the eventual shape.
+per-item/per-column/per-row weight) - but GTK4's raw layer had no
+`hexpand`/`vexpand`/`halign`/`valign` binding at all, and `eb-qt6` had
+no stretch factor, alignment-in-layout, or per-column/row stretch
+binding either. Round 2 (below) closed that gap.
 
 **Hiding a real nesting asymmetry in each adapter, not the contract**:
 GTK4's `Box`/`Grid` are real widgets and nest directly into each
@@ -321,6 +340,31 @@ backend.
 CheckBox/RadioButton/ComboBox are a similar three-way asymmetry (rich
 on Qt6, entirely absent - both raw and idiomatic layers - on GTK4 and
 Haiku) and are deferred to their own later round for the same reason.
+
+## Widgets and layout (Round 2) - per-child constraints
+
+`GuiBoxAddChildEx`/`GuiGridAttachEx`/`GuiGridSetColumnWeight`/
+`SetRowWeight` add expand/weight + alignment, after real prerequisite
+native work landed in `eb-gtk4` (`WidgetSetHExpand`/`VExpand`/`HAlign`/
+`VAlign`, plain raw FFI - GTK4 puts expand/alignment on the CHILD
+widget, not the container) and `eb-qt6` (`BoxLayoutAddWidgetEx`/
+`SetStretchFactor`, `GridLayoutAddWidgetEx`/`SetRowStretch`/
+`SetColumnStretch` - new native shim functions calling straight through
+to real, already-existing Qt overloads). `eb-haiku` needed none - its
+model (`HGroupLayoutSetItemWeight`, `HGridLayoutSetColumnWeight`/
+`SetRowWeight`, `HViewSetExplicitAlignment`) anchored the contract
+shape from the start, exactly as anticipated in Round 1.
+
+The existing non-`Ex` `GuiBoxAddChild`/`GuiGridAttach` are unchanged
+(implicit no-constraint behavior) - this is a purely additive contract
+change, no existing caller needs to change.
+
+Grid weight is the one real, non-adapter-bug asymmetry: `GtkGrid` has
+no per-column/row weight concept at all in real GTK4 (not a binding
+gap - it simply doesn't exist upstream), so `eb-gui-gtk4`'s
+`GuiGridSetColumnWeight`/`SetRowWeight` are a documented, accepted
+no-op, matching the Round 1 Action model's own "document the loss,
+don't block the feature" precedent.
 
 ## Ownership and the quit model
 

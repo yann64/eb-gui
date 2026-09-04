@@ -87,3 +87,13 @@ END TYPE
 TYPE GuiGrid
     handle AS ANY PTR
 END TYPE
+
+''' Alignment of a child within its allocated cell/slot on an axis it
+''' isn't expanding to fill. Each adapter maps these to its own
+''' toolkit's real enum internally (GTK_ALIGN_*/Qt::AlignmentFlag/
+''' H_ALIGN_*) - kept toolkit-neutral here, same convention as GuiBox's
+''' own 0=horizontal/1=vertical orientation parameter.
+CONST GUI_ALIGN_FILL AS INTEGER = 0
+CONST GUI_ALIGN_START AS INTEGER = 1
+CONST GUI_ALIGN_CENTER AS INTEGER = 2
+CONST GUI_ALIGN_END AS INTEGER = 3
