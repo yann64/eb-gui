@@ -327,12 +327,15 @@ SUB GuiWidgetSetMaxSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
 FUNCTION NewGuiCheckBox(text AS ZSTRING) AS GuiCheckBox
 SUB GuiCheckBoxSetChecked(cb AS GuiCheckBox, checked AS INTEGER)
 FUNCTION GuiCheckBoxIsChecked(cb AS GuiCheckBox) AS INTEGER
-' handler is SUB(userData AS ANY PTR, checked AS INTEGER)
+' handler is SUB(userData AS ANY PTR) - no checked-state param passed
+' (same reasoning as GuiEntryConnectChanged's own no-text-param design
+' - call GuiCheckBoxIsChecked yourself from inside the handler instead).
 SUB GuiCheckBoxConnectToggled(cb AS GuiCheckBox, handler AS ANY PTR, userData AS ANY PTR)
 
 FUNCTION NewGuiRadioButton(text AS ZSTRING) AS GuiRadioButton
 SUB GuiRadioButtonSetChecked(rb AS GuiRadioButton, checked AS INTEGER)
 FUNCTION GuiRadioButtonIsChecked(rb AS GuiRadioButton) AS INTEGER
+' handler is SUB(userData AS ANY PTR) - same shape as GuiCheckBoxConnectToggled.
 SUB GuiRadioButtonConnectToggled(rb AS GuiRadioButton, handler AS ANY PTR, userData AS ANY PTR)
 ' Groups `rb` with `firstInGroup` for mutual exclusivity - matches real
 ' GTK4's own chain-to-a-reference-button shape directly. A documented
@@ -345,7 +348,9 @@ SUB GuiComboBoxAddItem(cb AS GuiComboBox, text AS ZSTRING)
 FUNCTION GuiComboBoxGetSelectedIndex(cb AS GuiComboBox) AS INTEGER
 SUB GuiComboBoxSetSelectedIndex(cb AS GuiComboBox, index AS INTEGER)
 FUNCTION GuiComboBoxGetSelectedText(cb AS GuiComboBox) AS ZSTRING
-' handler is SUB(userData AS ANY PTR, index AS INTEGER)
+' handler is SUB(userData AS ANY PTR) - no index param passed, same
+' reasoning as GuiCheckBoxConnectToggled above - call
+' GuiComboBoxGetSelectedIndex yourself from inside the handler instead.
 SUB GuiComboBoxConnectChanged(cb AS GuiComboBox, handler AS ANY PTR, userData AS ANY PTR)
 ```
 
