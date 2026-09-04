@@ -117,3 +117,11 @@ END TYPE
 TYPE GuiSlider
     handle AS ANY PTR
 END TYPE
+
+TYPE GuiListBox
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiTextView
+    handle AS ANY PTR
+END TYPE

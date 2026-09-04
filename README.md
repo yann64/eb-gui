@@ -370,6 +370,26 @@ SUB GuiSliderSetValue(s AS GuiSlider, value AS INTEGER)
 ' as GuiCheckBoxConnectToggled above - call GuiSliderGetValue yourself
 ' from inside the handler instead.
 SUB GuiSliderConnectValueChanged(s AS GuiSlider, handler AS ANY PTR, userData AS ANY PTR)
+
+' --- Widget Round 6: ListBox, TextView ---
+FUNCTION NewGuiListBox() AS GuiListBox
+SUB GuiListBoxAddItem(lb AS GuiListBox, text AS ZSTRING)
+FUNCTION GuiListBoxGetItemText(lb AS GuiListBox, index AS INTEGER) AS ZSTRING
+FUNCTION GuiListBoxGetCount(lb AS GuiListBox) AS INTEGER
+SUB GuiListBoxClear(lb AS GuiListBox)
+' -1 if nothing selected.
+FUNCTION GuiListBoxGetSelectedIndex(lb AS GuiListBox) AS INTEGER
+SUB GuiListBoxSetSelectedIndex(lb AS GuiListBox, index AS INTEGER)
+' handler is SUB(userData AS ANY PTR) - call GuiListBoxGetSelectedIndex
+' yourself from inside the handler instead.
+SUB GuiListBoxConnectSelectionChanged(lb AS GuiListBox, handler AS ANY PTR, userData AS ANY PTR)
+
+FUNCTION NewGuiTextView() AS GuiTextView
+SUB GuiTextViewSetText(tv AS GuiTextView, text AS ZSTRING)
+FUNCTION GuiTextViewGetText(tv AS GuiTextView) AS ZSTRING
+SUB GuiTextViewSetEditable(tv AS GuiTextView, editable AS INTEGER)
+' Deliberately no ConnectTextChanged this round - see the "Widgets
+' (Round 6)" section below for why.
 ```
 
 ## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
@@ -526,6 +546,53 @@ all and is functionally redundant with the already-shipped
 all (real apps there fake indeterminate progress by looping
 `BStatusBar::Update()`) - a genuine 1-of-3 absence with no reasonable
 fallback.
+
+## Widgets (Round 6) - ListBox, TextView
+
+`TextView` needed **zero** prerequisite native work anywhere - already
+fully usable generically (not source-editor-specific) on all three
+backends. `ListBox` needed real new work on all three: `eb-gtk4`
+(v0.15.0) gained selection get/set and a way to read a row's own child
+widget back; `eb-haiku` (v0.17.0) gained `HListView`/`HStringItem`
+from scratch.
+
+**A real ABI trap this round's own research caught before it became
+another Round-4-style bug**: real GTK4's `"row-selected"` signal shape
+is `(GtkListBox*, GtkListBoxRow*, gpointer)` - **three** real
+arguments, not two. Reusing Round 4's own generic 2-parameter
+trampoline for it would have silently misdelivered the exact same way
+the original Round 4 bug did. `eb-gui-gtk4` uses a NEW, dedicated
+3-parameter trampoline instead - the same technique
+`shim_actiontrigger.cpp` already used for `GSimpleAction`'s own real
+3-arg `"activate"` signal.
+
+**A real, confirmed-not-assumed Haiku finding**: unlike every other
+control bound this session, real `BListView` has no `BInvoker`/
+target+message mechanism for per-selection-change notification - only
+`SetInvocationMessage` (double-click/Enter), not every selection
+change. `eb-haiku` needed a genuine new `ShimListView` subclass
+overriding the protected virtual `SelectionChanged()` hook instead
+(the same "no other way to reach a virtual from eBasic" reasoning as
+`ShimWindow`/`ShimView`), not the usual `HApplicationAddHandler`+
+`SetTarget` mechanism.
+
+`GuiTextView` deliberately has **no** `ConnectTextChanged` this
+round - real Haiku's `BTextView` isn't a `BControl` and has no
+existing notification mechanism for live text changes; adding one
+would need its own new virtual-forwarding shim (a `ShimTextView`),
+scoped as a real, explicit deferral rather than silently dropped.
+`GuiListBoxGetItemText` needed no internal item-tracking table on
+either `eb-gui-gtk4` (`gtk_list_box_row_get_child` reads back the
+appended `Label` directly) or `eb-gui-haiku` (`BStringItem::Text()` is
+a real, direct getter) - a real improvement over Round 4's `GuiComboBox`,
+which needed one on `eb-gui-haiku` since `BMenuItem` has no label
+getter.
+
+Standalone `GuiScrollBar` was considered and explicitly excluded -
+all three backends' own research independently concluded it's
+low-value: the auto-scrollbar container each toolkit already has
+(`ScrolledWindow`/`ScrollArea`/`BScrollView`) covers the real common
+case of scrolling a list or text view.
 
 ## Ownership and the quit model
 
