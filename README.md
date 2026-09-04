@@ -5,7 +5,11 @@ universal, cross-toolkit `Application`/`Window` API, managed with `ebpm`.
 
 ## Status
 
-Phase 1: `Application`/`Window` only. Two real backend adapters exist:
+Phase 1: `Application`/`Window`, plus `StatusBar`/`Timer` from the
+Phase 2 slice (`Menu`/`Toolbar` are still pending - GTK4 removed its
+own classic `GtkMenuBar`/`GtkToolbar` widgets entirely, so that half
+needs its own design pass over `GMenuModel`/`GAction`, not just adapter
+glue). Two real backend adapters exist:
 [`eb-gui-gtk4`](https://github.com/yann64/eb-gui-gtk4) and
 [`eb-gui-qt6`](https://github.com/yann64/eb-gui-qt6), each with a
 near-identical `examples/hello_window.bas` (same calls, differing only
@@ -16,8 +20,7 @@ every contract function. Haiku and Win32 adapters are a planned
 follow-on (Haiku needs real prerequisite work in `eb-haiku` first -
 window move/resize/title aren't bound there yet despite `BWindow`
 supporting all three natively; Win32 has no eBasic binding at all yet).
-Menu, toolbar, statusbar, timer, and the widget/layout-with-constraints
-system are a separate, later phase.
+The widget/layout-with-constraints system is a separate, later phase.
 
 ## Why this package is just two `TYPE`s
 
@@ -105,6 +108,40 @@ SUB GuiWindowSetCloseCallback(win AS GuiWindow, handler AS ANY PTR, userData AS 
 
 ' Only for a window never Run/shown - see "Ownership" below.
 SUB GuiWindowDestroy(win AS GuiWindow)
+
+TYPE GuiStatusBar
+    handle AS ANY PTR
+END TYPE
+
+' Auto-created per window (matches both toolkits' own "window owns its
+' status bar" convention - real GtkStatusbar/QStatusBar are each
+' created once per window and reused) - there is no NewGuiStatusBar.
+FUNCTION GuiWindowStatusBar(win AS GuiWindow) AS GuiStatusBar
+SUB GuiStatusBarShowMessage(sb AS GuiStatusBar, text AS ZSTRING)
+SUB GuiStatusBarClear(sb AS GuiStatusBar)
+
+TYPE GuiTimer
+    handle AS ANY PTR
+END TYPE
+
+' `parent` is required for Qt6's own object-lifetime management (a
+' QTimer must be parented or it leaks) - the GTK4 adapter accepts and
+' ignores it, since its own timer isn't a GObject at all and has no
+' parent concept.
+FUNCTION NewGuiTimer(parent AS GuiWindow) AS GuiTimer
+SUB GuiTimerSetInterval(t AS GuiTimer, milliseconds AS INTEGER)
+' If set, the timer fires once, then stops.
+SUB GuiTimerSetSingleShot(t AS GuiTimer, singleShot AS INTEGER)
+' handler is `SUB(userData AS ANY PTR)` - no return value (unlike a
+' close callback, nothing to veto).
+SUB GuiTimerConnectTimeout(t AS GuiTimer, handler AS ANY PTR, userData AS ANY PTR)
+SUB GuiTimerStart(t AS GuiTimer)
+SUB GuiTimerStop(t AS GuiTimer)
+FUNCTION GuiTimerIsActive(t AS GuiTimer) AS INTEGER
+' Meaningful on GTK4 (frees its own plain heap allocation); a documented
+' no-op on Qt6 (Qt itself destroys a QTimer when its parent window is
+' destroyed - eb-qt6's own timer.bas has no manual destroy at all).
+SUB GuiTimerDestroy(t AS GuiTimer)
 ```
 
 ## Ownership and the quit model

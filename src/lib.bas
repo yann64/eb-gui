@@ -5,22 +5,26 @@
 ' its own and implements nothing.
 '
 ' WHY THIS IS SO SMALL, AND WHAT ISN'T ENFORCED BY THE COMPILER:
-' eBasic has no virtual methods/interfaces (a TYPE is a plain value
-' struct - see docs/reference/type-oop.md in the eBasic compiler repo),
-' and an ordinary (non-Extern) top-level FUNCTION/SUB can't be forward-
-' declared without a body in the same compilation the way an Extern
-' declaration can. So there is no compiler-checked way for this package
-' to declare "every adapter must implement a function named
-' GuiWindowShow with this exact signature" - only the TYPE shapes below
-' are real, shared, compiler-checked data. The function surface each
-' adapter must implement (listed in full in this package's README) is a
-' documented CONVENTION, not an enforced interface - verified in
+' eBasic DOES support real virtual dispatch (Declare Virtual Function/
+' Override, a real vtable - see docs/reference/type-oop.md's EXTENDS
+' section), but a TYPE using one can't cross an Extern/ebc --lib package
+' boundary at all (Sema rejects it - a vtable breaks the plain-data/
+' standard-layout requirement that boundary needs), and this package,
+' eb-gui-gtk4, and eb-gui-qt6 are three separately-compiled --lib
+' archives. Separately, an ordinary (non-Extern) top-level FUNCTION/SUB
+' can't be forward-declared without a body in the same compilation the
+' way an Extern declaration can. So there is no compiler-checked way
+' for this package to declare "every adapter must implement a function
+' named GuiWindowShow with this exact signature" - only the TYPE shapes
+' below are real, shared, compiler-checked data. The function surface
+' each adapter must implement (listed in full in this package's README)
+' is a documented CONVENTION, not an enforced interface - verified in
 ' practice by a cross-backend smoke test (the same consumer .bas source
 ' compiled once per adapter dependency) rather than by the type system.
-' This is the honest tradeoff of building a "universal" API on a
-' language with static, non-polymorphic TYPEs and no runtime backend-
-' swapping (each toolkit is a separate native library anyway, so this
-' isn't a loss compared to some achievable alternative).
+' This is the honest tradeoff of building a "universal" API that spans
+' multiple separately-compiled packages, with no runtime backend-
+' swapping either (each toolkit is a separate native library you'd
+' never want to link all of into one binary anyway).
 '
 ' `handle` is deliberately a bare ANY PTR, not any specific backend's
 ' own handle TYPE - each adapter's implementation casts it to/from
@@ -37,5 +41,13 @@ TYPE GuiApplication
 END TYPE
 
 TYPE GuiWindow
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiStatusBar
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiTimer
     handle AS ANY PTR
 END TYPE
