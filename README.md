@@ -20,11 +20,22 @@ near-identical `examples/hello_window.bas` (same calls, differing only
 in the `#include` target and two string literals) - this project's own
 cross-backend proof, both screenshot-verified live producing the same
 behavior, plus a per-adapter headless `examples/verify` exercising
-every contract function. Haiku and Win32 adapters are a planned
-follow-on (Haiku needs real prerequisite work in `eb-haiku` first -
-window move/resize/title aren't bound there yet despite `BWindow`
-supporting all three natively; Win32 has no eBasic binding at all yet).
-The widget/layout-with-constraints system is a separate, later phase.
+every contract function. **Both existing adapters already run on Haiku
+unmodified** (confirmed 2026-09-04: real HaikuPorts `gtk4`/`qt6_base`
+packages, `eb-gui-gtk4`/`eb-gui-qt6`'s own `examples/verify` pass in
+full, `eb-gtk4`'s `examples/menu_toolbar` renders live with Haiku's
+native window decorations) - so a *separate*, BWindow-native
+`eb-gui-haiku` adapter is not required just to get eBasic GUI apps
+running on Haiku; it would only matter for apps that want to avoid a
+GTK4/Qt6 runtime dependency in favor of Haiku's own native toolkit, a
+narrower motivation than originally assumed when Haiku support was
+scoped as a from-scratch adapter. A real BWindow-native adapter is
+still a possible future track on that narrower motivation (would need
+prerequisite work in `eb-haiku` first - window move/resize/title aren't
+bound there yet despite `BWindow` supporting all three natively). Win32
+has no eBasic binding at all yet, so that adapter remains unstarted
+regardless. The widget/layout-with-constraints system is a separate,
+later phase.
 
 ## Why this package is just two `TYPE`s
 
