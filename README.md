@@ -103,16 +103,17 @@ either way.
 
 ## Using as a dependency
 
-An application depends on this package **and** exactly one adapter:
+An application depends on exactly one adapter - not this package
+directly (the adapter's own `.iface.bas` already carries a full copy of
+`GuiApplication`/`GuiWindow`, since it `#include`s this package's own
+interface internally; `#include`ing both would redeclare each `TYPE`):
 
 ```toml
 [dependencies]
-gui = { git = "https://github.com/yann64/eb-gui.git" }
 gui-gtk4 = { git = "https://github.com/yann64/eb-gui-gtk4.git" }
 ```
 
 ```basic
-#include "gui.iface.bas"
 #include "gui-gtk4.iface.bas"
 
 DIM app AS GuiApplication
