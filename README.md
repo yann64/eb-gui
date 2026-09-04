@@ -322,6 +322,31 @@ SUB GuiWidgetSetMinSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
 ' generic per-widget maximum-size concept at all (confirmed absent
 ' upstream, not a binding gap).
 SUB GuiWidgetSetMaxSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
+
+' --- Widget Round 4: CheckBox, RadioButton, ComboBox ---
+FUNCTION NewGuiCheckBox(text AS ZSTRING) AS GuiCheckBox
+SUB GuiCheckBoxSetChecked(cb AS GuiCheckBox, checked AS INTEGER)
+FUNCTION GuiCheckBoxIsChecked(cb AS GuiCheckBox) AS INTEGER
+' handler is SUB(userData AS ANY PTR, checked AS INTEGER)
+SUB GuiCheckBoxConnectToggled(cb AS GuiCheckBox, handler AS ANY PTR, userData AS ANY PTR)
+
+FUNCTION NewGuiRadioButton(text AS ZSTRING) AS GuiRadioButton
+SUB GuiRadioButtonSetChecked(rb AS GuiRadioButton, checked AS INTEGER)
+FUNCTION GuiRadioButtonIsChecked(rb AS GuiRadioButton) AS INTEGER
+SUB GuiRadioButtonConnectToggled(rb AS GuiRadioButton, handler AS ANY PTR, userData AS ANY PTR)
+' Groups `rb` with `firstInGroup` for mutual exclusivity - matches real
+' GTK4's own chain-to-a-reference-button shape directly. A documented
+' no-op on eb-gui-haiku (grouping there is automatic via sibling
+' detection in a shared container, not a binding gap).
+SUB GuiRadioButtonSetGroup(rb AS GuiRadioButton, firstInGroup AS GuiRadioButton)
+
+FUNCTION NewGuiComboBox() AS GuiComboBox
+SUB GuiComboBoxAddItem(cb AS GuiComboBox, text AS ZSTRING)
+FUNCTION GuiComboBoxGetSelectedIndex(cb AS GuiComboBox) AS INTEGER
+SUB GuiComboBoxSetSelectedIndex(cb AS GuiComboBox, index AS INTEGER)
+FUNCTION GuiComboBoxGetSelectedText(cb AS GuiComboBox) AS ZSTRING
+' handler is SUB(userData AS ANY PTR, index AS INTEGER)
+SUB GuiComboBoxConnectChanged(cb AS GuiComboBox, handler AS ANY PTR, userData AS ANY PTR)
 ```
 
 ## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
@@ -406,6 +431,40 @@ this, but still allow flex within other constraints" to "force exactly
 this size" - a real, meaningful behavior difference, not a cosmetic
 one, so it's left out rather than shipped as a misleading
 approximation.
+
+## Widgets (Round 4) - CheckBox, RadioButton, ComboBox
+
+Unlike every layout-constraints round (where Haiku anchored the
+shape), **Qt6 anchors this round's shape** - it already had rich,
+working `CheckBox`/`RadioButton`/`ComboBox`/`ButtonGroup` bindings,
+while `eb-gtk4`/`eb-haiku` had nothing at all for any of the three.
+
+Real GTK4 unifies checkbox and radio-button semantics into ONE widget
+class, `GtkCheckButton` (`GtkRadioButton` was removed upstream
+entirely) - `eb-gui-gtk4`'s `GuiCheckBox`/`GuiRadioButton` both wrap
+the same underlying `CheckButton`, with the contract-level TYPE being
+the only thing that distinguishes their role. `GuiComboBox` binds the
+deprecated-but-simple `GtkComboBoxText` rather than the current,
+heavier `GtkDropDown` - matching this ecosystem's own established
+preference for the simplest working API. `eb-haiku` needed genuinely
+new native work (`HCheckBox`/`HRadioButton`, `eb-haiku` v0.15.0) but
+its combo-box role was already covered by the pre-existing
+`HMenuField`.
+
+**The one real 3-way asymmetry is radio-button grouping**: Qt6 needs
+an explicit `ButtonGroup` object for cross-container exclusivity; GTK4
+chains a `GtkCheckButton` directly to a reference one
+(`gtk_check_button_set_group`, no object at all); Haiku enforces
+exclusivity automatically among `BRadioButton` siblings in a shared
+container (confirmed via a real 2-radio-button sibling test on
+hardware, not assumed from the similar `BMenuItem` precedent - also no
+object at all). Rather than expose Qt6's own richer `ButtonGroup` TYPE
+in the contract, `GuiRadioButtonSetGroup(rb, firstInGroup)` matches
+GTK4's simpler shape directly: `eb-gui-gtk4` passes it straight
+through; `eb-gui-qt6` lazily creates and tracks a real `ButtonGroup`
+internally (same "hide the real object behind the scenes" pattern as
+`GuiBox`/`GuiGrid`'s own holder-widget design); `eb-gui-haiku` treats
+it as a documented no-op (grouping there is already automatic).
 
 ## Ownership and the quit model
 
