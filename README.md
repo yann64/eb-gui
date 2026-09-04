@@ -21,12 +21,25 @@ system are a separate, later phase.
 
 ## Why this package is just two `TYPE`s
 
-eBasic has no virtual methods or interfaces - a `TYPE` is a plain value
-struct (see the compiler's own `docs/reference/type-oop.md`), and each
-toolkit's native library is a separate runtime dependency you'd never
-want to link all of into one binary anyway. So a truly universal API
-can't do runtime backend-swapping the way wxWidgets or SDL do - the
-backend has to be a compile-time/package-time choice.
+**Correction (this README originally claimed eBasic has no virtual
+methods at all - wrong, found via a case-sensitive grep that missed the
+real `Virtual`/`Override` keywords; eBasic genuinely supports virtual
+dispatch through a vtable, `docs/reference/type-oop.md`'s own `EXTENDS`
+section).** The real, confirmed reason a polymorphic interface still
+isn't viable here: a `TYPE` using a virtual method has a vtable, which
+breaks the plain-data/standard-layout requirement for crossing an
+`Extern`/`ebc --lib` package boundary - `ebc`'s own `Sema` explicitly
+*rejects* a `UserDefined` TYPE with a constructor, destructor, or
+virtual method used as a parameter/return type on such a boundary
+(confirmed in the compiler's own M4-era implementation notes). Since
+`eb-gui`, `eb-gui-gtk4`, and `eb-gui-qt6` are three separately-compiled
+`--lib` archives, a virtual-dispatch-based shared interface could never
+span them regardless of the language supporting virtual dispatch
+in general. Combined with each toolkit's native library being a
+separate runtime dependency you'd never want to link all of into one
+binary anyway, a truly universal API still can't do runtime
+backend-swapping the way wxWidgets or SDL do - the backend has to be a
+compile-time/package-time choice either way.
 
 The chosen shape: this package defines the shared `GuiApplication`/
 `GuiWindow` `TYPE`s (real, compiler-checked, identical across every
