@@ -5,11 +5,15 @@ universal, cross-toolkit `Application`/`Window` API, managed with `ebpm`.
 
 ## Status
 
-Phase 1: `Application`/`Window`, plus `StatusBar`/`Timer` from the
-Phase 2 slice (`Menu`/`Toolbar` are still pending - GTK4 removed its
-own classic `GtkMenuBar`/`GtkToolbar` widgets entirely, so that half
-needs its own design pass over `GMenuModel`/`GAction`, not just adapter
-glue). Two real backend adapters exist:
+Phase 1: `Application`/`Window`, plus `StatusBar`/`Timer` and now
+`Menu`/`Toolbar`/`Action` from the Phase 2 slice. GTK4 removed its own
+classic `GtkMenuBar`/`GtkToolbar` widgets entirely upstream, so the
+`eb-gtk4` side of this needed a real design pass over its modern
+`GMenuModel`/`GAction`/`GtkPopoverMenuBar` replacement (see
+`GuiMenuAddAction`'s own doc comment below for the resulting capability
+mismatch this contract had to paper over: GTK4 actions are natively
+shareable across menus, Qt6's binding creates one fresh per call - this
+contract follows Qt6's simpler shape). Two real backend adapters exist:
 [`eb-gui-gtk4`](https://github.com/yann64/eb-gui-gtk4) and
 [`eb-gui-qt6`](https://github.com/yann64/eb-gui-qt6), each with a
 near-identical `examples/hello_window.bas` (same calls, differing only
@@ -151,6 +155,55 @@ FUNCTION GuiTimerIsActive(t AS GuiTimer) AS INTEGER
 ' no-op on Qt6 (Qt itself destroys a QTimer when its parent window is
 ' destroyed - eb-qt6's own timer.bas has no manual destroy at all).
 SUB GuiTimerDestroy(t AS GuiTimer)
+
+TYPE GuiMenuBar
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiMenu
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiToolBar
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiAction
+    handle AS ANY PTR
+END TYPE
+
+' Auto-created per window (matches both toolkits' own "window owns its
+' menu bar" convention) - there is no NewGuiMenuBar.
+FUNCTION GuiWindowMenuBar(win AS GuiWindow) AS GuiMenuBar
+FUNCTION GuiMenuBarAddMenu(bar AS GuiMenuBar, title AS ZSTRING) AS GuiMenu
+' Creates a new action labeled `text`, appended to `menu` - owned by the
+' menu (no separate destroy function, matching GuiWindowDestroy's own
+' "container now owns it" convention elsewhere in this contract). This
+' is the lowest common shape both toolkits support without a hack: real
+' GTK4 actions are shareable, window-scoped objects independent of any
+' menu, but real Qt6's own binding (this contract's model) creates a
+' fresh action per call - so an action can't be added to more than one
+' menu/tool bar through this contract (a real capability difference,
+' not an oversight - see eb-gui-gtk4's own README for how it fakes this
+' shape on top of GTK4's richer, action-sharing native model).
+FUNCTION GuiMenuAddAction(menu AS GuiMenu, text AS ZSTRING) AS GuiAction
+' handler is `SUB(userData AS ANY PTR)` - no return value (unlike a
+' close callback, nothing to veto).
+SUB GuiActionConnectTriggered(a AS GuiAction, handler AS ANY PTR, userData AS ANY PTR)
+SUB GuiActionSetEnabled(a AS GuiAction, enabled AS INTEGER)
+FUNCTION GuiActionIsEnabled(a AS GuiAction) AS INTEGER
+' Fires the action's own triggered/activate signal, the same path a
+' real menu-item/toolbar-button click goes through - lets a connected
+' GuiActionConnectTriggered handler be exercised/tested programmatically.
+SUB GuiActionTrigger(a AS GuiAction)
+
+' The window's own single tool bar, auto-created the first time this is
+' called for a given window (there is no NewGuiToolBar, and no support
+' for more than one tool bar per window through this contract - real
+' GTK4 has no independent multi-tool-bar concept the way Qt6 does, so
+' "exactly one, shared" is the lowest common shape).
+FUNCTION GuiWindowToolBar(win AS GuiWindow) AS GuiToolBar
+FUNCTION GuiToolBarAddAction(bar AS GuiToolBar, text AS ZSTRING) AS GuiAction
 ```
 
 ## Ownership and the quit model

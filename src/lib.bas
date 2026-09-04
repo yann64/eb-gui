@@ -51,3 +51,19 @@ END TYPE
 TYPE GuiTimer
     handle AS ANY PTR
 END TYPE
+
+TYPE GuiMenuBar
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiMenu
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiToolBar
+    handle AS ANY PTR
+END TYPE
+
+TYPE GuiAction
+    handle AS ANY PTR
+END TYPE
