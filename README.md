@@ -104,6 +104,15 @@ SUB GuiWindowClearModal(win AS GuiWindow)
 ' Vetoable close - handler is `FUNCTION(userData AS ANY PTR) AS INTEGER`,
 ' nonzero = allow the close (matches eb-haiku's own BWindow::
 ' QuitRequested polarity).
+'
+' CONFIRMED real cross-backend asymmetry (found building eb-gui-qt6,
+' not assumed): on Qt6, GuiApplicationQuit implicitly tries to close
+' every currently-*shown* window first - a permanently-vetoing callback
+' on a shown window silently blocks GuiApplicationQuit too, not just a
+' real user close. On GTK4, GuiApplicationQuit always stops
+' unconditionally regardless of any window's close callback. Avoid a
+' shown window whose callback can veto forever if the application also
+' needs GuiApplicationQuit to reliably work.
 SUB GuiWindowSetCloseCallback(win AS GuiWindow, handler AS ANY PTR, userData AS ANY PTR)
 
 ' Only for a window never Run/shown - see "Ownership" below.
