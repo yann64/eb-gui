@@ -388,8 +388,6 @@ FUNCTION NewGuiTextView() AS GuiTextView
 SUB GuiTextViewSetText(tv AS GuiTextView, text AS ZSTRING)
 FUNCTION GuiTextViewGetText(tv AS GuiTextView) AS ZSTRING
 SUB GuiTextViewSetEditable(tv AS GuiTextView, editable AS INTEGER)
-' Deliberately no ConnectTextChanged this round - see the "Widgets
-' (Round 6)" section below for why.
 
 ' --- Widget Round 7: settable preferred size ---
 ' `handle` is any other Gui* TYPE's own `.handle` (same convention as
@@ -407,6 +405,16 @@ SUB GuiTextViewSetEditable(tv AS GuiTextView, editable AS INTEGER)
 ' mistake in the adapter's own call. See "Widgets (Round 7)" below for
 ' the full writeup.
 SUB GuiWidgetSetPreferredSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
+
+' --- Widget Round 8: GuiTextViewConnectTextChanged ---
+' handler is SUB(userData AS ANY PTR) - no text param, same reasoning
+' as GuiEntryConnectChanged - call GuiTextViewGetText yourself from
+' inside the handler instead. Fires on EVERY real text change,
+' interactive AND programmatic (SetText/Insert/Delete-equivalent
+' calls) alike - see "Widgets (Round 8)" below for the real Haiku
+' finding that shaped this (BTextView has no single native hook for
+' this, unlike every other widget so far).
+SUB GuiTextViewConnectTextChanged(tv AS GuiTextView, handler AS ANY PTR, userData AS ANY PTR)
 ```
 
 ## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
@@ -653,6 +661,50 @@ of this project's own established discipline: a plausible-sounding
 capability claim - even one that survives header inspection and a
 direct object-level query - still needs a full, decisive behavioral
 probe before it's safe to ship as "real."
+
+## Widgets (Round 8) - `GuiTextViewConnectTextChanged`
+
+Closes the one gap Round 6 deliberately left open (a real, scoped
+prerequisite flagged at the time, not speculative).
+
+**A real, confirmed-not-assumed Haiku finding, checked via direct
+header inspection**: unlike `GuiListBox`'s own single
+`SelectionChanged()` hook (Round 6), real `BTextView` has NO single
+"TextChanged" virtual at all - only two SEPARATE protected virtuals,
+`InsertText`/`DeleteText`, each firing on every real text mutation. A
+standalone hardware probe confirmed `SetText()` itself internally
+calls `DeleteText()` then `InsertText()`, so `eb-haiku`'s own new
+`ShimTextView : public BTextView` (v0.18.0) overrides both and fires
+one plain callback from each, catching interactive typing/pasting/
+deleting AND programmatic `SetText`/`Insert`/`Delete` alike with a
+single notification. `GuiTextViewConnectTextChanged` on
+`eb-gui-haiku` is a direct pass-through to the new
+`HTextViewConnectTextChanged` - not the usual
+`HApplicationAddHandler`+`SetTarget` mechanism, `ShimTextView`'s own
+callback is already self-contained, same shape as
+`GuiListBoxConnectSelectionChanged`'s own precedent.
+
+`eb-gui-qt6` needed zero prerequisite work - real `eb-qt6` already had
+`TextEditConnectTextChanged`, and real `QTextEdit::textChanged()`
+itself carries no text parameter, exactly matching this contract
+function's own shape - a pure pass-through.
+
+`eb-gui-gtk4` reuses the Round 4 generic `eb_gui_gtk4_connect_userdata_signal`
+trampoline, connected on the text view's own BUFFER (not the view
+itself) - real `GtkTextBuffer`'s `"changed"` signal has the identical
+`(instance, user_data)` shape as `"clicked"`/`"changed"`/`"toggled"`/
+`"value-changed"`, verified via a standalone spike before wiring in
+(same rigor as every prior native-signal addition this ecosystem has
+made, sharpened further by Round 7's own lesson that a plausible-
+sounding shape still needs a decisive check).
+
+Verified per-adapter: `eb-gui-gtk4`/`eb-gui-qt6` via extended
+`examples/verify` (headless - a genuine `GuiTextViewSetText` call
+firing the connected handler, `userData` delivery checked against a
+known marker); `eb-gui-haiku` via the same over SSH on real Haiku
+hardware, backed by `eb-haiku`'s own new `tests/textview_basics.bas`
+check (confirming the callback fires exactly twice - `DeleteText` +
+`InsertText` - for a `SetText` replacing existing content).
 
 ## Ownership and the quit model
 
