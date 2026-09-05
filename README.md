@@ -390,6 +390,22 @@ FUNCTION GuiTextViewGetText(tv AS GuiTextView) AS ZSTRING
 SUB GuiTextViewSetEditable(tv AS GuiTextView, editable AS INTEGER)
 ' Deliberately no ConnectTextChanged this round - see the "Widgets
 ' (Round 6)" section below for why.
+
+' --- Widget Round 7: settable preferred size ---
+' `handle` is any other Gui* TYPE's own `.handle` (same convention as
+' GuiWidgetSetMinSize/SetMaxSize). Real ONLY on eb-gui-haiku (BView::
+' SetExplicitPreferredSize) - a documented, accepted no-op on
+' eb-gui-gtk4/eb-gui-qt6, where a widget's own "natural" size is a
+' READ-ONLY computed query (gtk_widget_measure/QWidget::sizeHint), not
+' a settable property on the generic base widget class - confirmed via
+' direct header inspection, not assumed, both when Round 3 first
+' scoped min/max size and reconfirmed before this round. Unlike
+' min/max (a floor/ceiling that only clamps a widget when the layout
+' needs to squeeze or stretch it), a real preferred size is a genuine
+' upfront ASK the layout tries to honor even with no weight/expand set
+' at all - see the "Widgets (Round 7)" section below for the visual
+' proof of that distinction.
+SUB GuiWidgetSetPreferredSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
 ```
 
 ## Widgets and layout (Round 1) - Button/Label/Entry, Box/Grid
@@ -463,9 +479,9 @@ individual widget classes like `GtkLabel` have unrelated, narrower
 `max-width-chars`-style properties, nothing at the `GtkWidget` base
 level any widget could rely on uniformly.
 
-**Deliberately NOT included**: a settable "preferred size." Real
-Haiku's `HViewSetExplicitPreferredSize` genuinely overrides what its
-layout treats as preferred - but GTK4's `gtk_widget_measure`/`Qt6`'s
+**Deliberately NOT included this round**: a settable "preferred size."
+Real Haiku's `HViewSetExplicitPreferredSize` genuinely overrides what
+its layout treats as preferred - but GTK4's `gtk_widget_measure`/`Qt6`'s
 `sizeHint()` are both **read-only queries** computed per-widget-type,
 not settable properties on the generic widget base. Approximating
 "preferred size" on those two backends via `SetMinSize`+`SetMaxSize`
@@ -473,7 +489,8 @@ to the same value would silently change the semantics from "prefer
 this, but still allow flex within other constraints" to "force exactly
 this size" - a real, meaningful behavior difference, not a cosmetic
 one, so it's left out rather than shipped as a misleading
-approximation.
+approximation. Shipped later as a real, Haiku-only, documented-no-op-
+elsewhere feature in Round 7 - see "Widgets (Round 7)" below.
 
 ## Widgets (Round 4) - CheckBox, RadioButton, ComboBox
 
@@ -593,6 +610,42 @@ all three backends' own research independently concluded it's
 low-value: the auto-scrollbar container each toolkit already has
 (`ScrolledWindow`/`ScrollArea`/`BScrollView`) covers the real common
 case of scrolling a list or text view.
+
+## Widgets (Round 7) - settable preferred size
+
+`GuiWidgetSetPreferredSize` closes the one gap Round 3 deliberately
+left open, after reconfirming (via direct header inspection, not
+relying on the earlier finding alone) that nothing had changed: real
+GTK4's `gtk_widget_measure`/Qt6's `sizeHint()` remain **read-only**
+queries computed per-widget-class, with no settable property on the
+generic base widget - `GtkWidget`'s own vfunc-based `measure`, and
+`QWidget::sizeHint()`'s `Q_PROPERTY(... READ sizeHint)` with no
+`WRITE` accessor, are both only overridable by SUBCLASSING, something
+neither this contract nor an eBasic caller can do to a foreign C++/GLib
+class. `QSizePolicy` was checked too and confirmed to hold only policy
+flags and stretch factors, never a real size number itself. Real
+Haiku's `BView::SetExplicitPreferredSize` remains the one genuine,
+generic, settable API among the three - `eb-gui-haiku` passes it
+straight through; `eb-gui-gtk4`/`eb-gui-qt6` both treat it as a
+documented, accepted no-op, same "document the loss, don't block the
+feature" precedent as `GuiWidgetSetMaxSize`/`GuiGridSetColumnWeight`/
+`GuiProgressBarSetRange`'s own `min` before it.
+
+**Why this is NOT the same thing as `SetMinSize`/`SetMaxSize`, verified
+visually not just asserted**: min/max is a floor/ceiling that only
+clamps a widget when the layout needs to squeeze or stretch it (Round
+3's own finding) - a min-sized widget with no expand/weight set just
+renders at its own small natural size, since nothing is forcing the
+layout to allocate it more. A real preferred size is a genuine upfront
+ASK the layout tries to honor even with **no** weight/expand at all.
+Verified on real Haiku hardware with a direct side-by-side screenshot:
+two buttons in the same unweighted box, one only given
+`GuiWidgetSetMinSize(200, 60)` (rendered at its own small natural
+size, exactly as Round 3 predicted) and the other given
+`GuiWidgetSetPreferredSize(200, 60)` (rendered genuinely wider and
+taller, matching the ask) - a real, visually confirmed behavioral
+difference between the two functions, not merely a documentation
+claim.
 
 ## Ownership and the quit model
 
