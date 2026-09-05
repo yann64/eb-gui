@@ -393,18 +393,19 @@ SUB GuiTextViewSetEditable(tv AS GuiTextView, editable AS INTEGER)
 
 ' --- Widget Round 7: settable preferred size ---
 ' `handle` is any other Gui* TYPE's own `.handle` (same convention as
-' GuiWidgetSetMinSize/SetMaxSize). Real ONLY on eb-gui-haiku (BView::
-' SetExplicitPreferredSize) - a documented, accepted no-op on
-' eb-gui-gtk4/eb-gui-qt6, where a widget's own "natural" size is a
+' GuiWidgetSetMinSize/SetMaxSize). A documented, accepted no-op on ALL
+' THREE backends - GTK4/Qt6 because a widget's own "natural" size is a
 ' READ-ONLY computed query (gtk_widget_measure/QWidget::sizeHint), not
-' a settable property on the generic base widget class - confirmed via
-' direct header inspection, not assumed, both when Round 3 first
-' scoped min/max size and reconfirmed before this round. Unlike
-' min/max (a floor/ceiling that only clamps a widget when the layout
-' needs to squeeze or stretch it), a real preferred size is a genuine
-' upfront ASK the layout tries to honor even with no weight/expand set
-' at all - see the "Widgets (Round 7)" section below for the visual
-' proof of that distinction.
+' a settable property on the generic base widget class (confirmed via
+' direct header inspection); Haiku because, although real BView::
+' SetExplicitPreferredSize genuinely exists and correctly STORES the
+' value, real BGroupLayout never actually CONSULTS it when computing a
+' child's rendered size - confirmed via 6 standalone C++ probes against
+' real hardware (fill alignment, nonzero weight, forced resize/squeeze,
+' window auto-sizing - none of them made it take effect), a real,
+' specific gap in BGroupLayout's own use of PreferredSize(), not a
+' mistake in the adapter's own call. See "Widgets (Round 7)" below for
+' the full writeup.
 SUB GuiWidgetSetPreferredSize(handle AS ANY PTR, width AS INTEGER, height AS INTEGER)
 ```
 
@@ -480,17 +481,19 @@ individual widget classes like `GtkLabel` have unrelated, narrower
 level any widget could rely on uniformly.
 
 **Deliberately NOT included this round**: a settable "preferred size."
-Real Haiku's `HViewSetExplicitPreferredSize` genuinely overrides what
-its layout treats as preferred - but GTK4's `gtk_widget_measure`/`Qt6`'s
-`sizeHint()` are both **read-only queries** computed per-widget-type,
-not settable properties on the generic widget base. Approximating
-"preferred size" on those two backends via `SetMinSize`+`SetMaxSize`
-to the same value would silently change the semantics from "prefer
-this, but still allow flex within other constraints" to "force exactly
-this size" - a real, meaningful behavior difference, not a cosmetic
-one, so it's left out rather than shipped as a misleading
-approximation. Shipped later as a real, Haiku-only, documented-no-op-
-elsewhere feature in Round 7 - see "Widgets (Round 7)" below.
+Real Haiku's `HViewSetExplicitPreferredSize` LOOKS like it overrides
+what its layout treats as preferred - but GTK4's
+`gtk_widget_measure`/`Qt6`'s `sizeHint()` are both **read-only
+queries** computed per-widget-type, not settable properties on the
+generic widget base. Approximating "preferred size" on those two
+backends via `SetMinSize`+`SetMaxSize` to the same value would
+silently change the semantics from "prefer this, but still allow flex
+within other constraints" to "force exactly this size" - a real,
+meaningful behavior difference, not a cosmetic one, so it's left out
+rather than shipped as a misleading approximation. Shipped later in
+Round 7 - see "Widgets (Round 7)" below for why real Haiku hardware
+testing turned out to overturn the "Haiku is the exception" premise
+too, making it a documented no-op on all three backends.
 
 ## Widgets (Round 4) - CheckBox, RadioButton, ComboBox
 
@@ -611,41 +614,45 @@ low-value: the auto-scrollbar container each toolkit already has
 (`ScrolledWindow`/`ScrollArea`/`BScrollView`) covers the real common
 case of scrolling a list or text view.
 
-## Widgets (Round 7) - settable preferred size
+## Widgets (Round 7) - settable preferred size, a documented no-op everywhere
 
-`GuiWidgetSetPreferredSize` closes the one gap Round 3 deliberately
-left open, after reconfirming (via direct header inspection, not
-relying on the earlier finding alone) that nothing had changed: real
-GTK4's `gtk_widget_measure`/Qt6's `sizeHint()` remain **read-only**
-queries computed per-widget-class, with no settable property on the
-generic base widget - `GtkWidget`'s own vfunc-based `measure`, and
-`QWidget::sizeHint()`'s `Q_PROPERTY(... READ sizeHint)` with no
-`WRITE` accessor, are both only overridable by SUBCLASSING, something
-neither this contract nor an eBasic caller can do to a foreign C++/GLib
-class. `QSizePolicy` was checked too and confirmed to hold only policy
-flags and stretch factors, never a real size number itself. Real
-Haiku's `BView::SetExplicitPreferredSize` remains the one genuine,
-generic, settable API among the three - `eb-gui-haiku` passes it
-straight through; `eb-gui-gtk4`/`eb-gui-qt6` both treat it as a
-documented, accepted no-op, same "document the loss, don't block the
-feature" precedent as `GuiWidgetSetMaxSize`/`GuiGridSetColumnWeight`/
-`GuiProgressBarSetRange`'s own `min` before it.
+`GuiWidgetSetPreferredSize` was scoped expecting Haiku to be the one
+backend where it would be genuinely real - real GTK4's
+`gtk_widget_measure`/Qt6's `sizeHint()` were reconfirmed (via direct
+header inspection, not relying on the earlier Round 3 finding alone)
+to remain **read-only** queries computed per-widget-class, with no
+settable property on the generic base widget (`GtkWidget`'s own
+vfunc-based `measure`, and `QWidget::sizeHint()`'s
+`Q_PROPERTY(... READ sizeHint)` with no `WRITE` accessor, both
+overridable only by SUBCLASSING, something neither this contract nor
+an eBasic caller can do to a foreign C++/GLib class - `QSizePolicy`
+was checked too and confirmed to hold only policy flags and stretch
+factors, never a real size number itself).
 
-**Why this is NOT the same thing as `SetMinSize`/`SetMaxSize`, verified
-visually not just asserted**: min/max is a floor/ceiling that only
-clamps a widget when the layout needs to squeeze or stretch it (Round
-3's own finding) - a min-sized widget with no expand/weight set just
-renders at its own small natural size, since nothing is forcing the
-layout to allocate it more. A real preferred size is a genuine upfront
-ASK the layout tries to honor even with **no** weight/expand at all.
-Verified on real Haiku hardware with a direct side-by-side screenshot:
-two buttons in the same unweighted box, one only given
-`GuiWidgetSetMinSize(200, 60)` (rendered at its own small natural
-size, exactly as Round 3 predicted) and the other given
-`GuiWidgetSetPreferredSize(200, 60)` (rendered genuinely wider and
-taller, matching the ask) - a real, visually confirmed behavioral
-difference between the two functions, not merely a documentation
-claim.
+**But real Haiku hardware testing overturned that expectation.** Real
+`BView::SetExplicitPreferredSize` genuinely exists and correctly
+STORES the value - a direct `PreferredSize()` query reports it back
+exactly. But six separate standalone C++ probes against a real
+`BButton` inside a real `BGroupLayout` (the exact combination
+`eb-gui-haiku`'s own `GuiBox` uses) each showed `BGroupLayout` never
+actually CONSULTS that stored value when computing a child's real
+rendered size - not with `SetExplicitAlignment` set to fill on both
+axes, not with a nonzero layout weight, not under a forced window
+resize or a genuine squeeze (window smaller than the sum of children's
+sizes), not even in how the enclosing window auto-sizes itself. The
+identical probes run against `SetExplicitMinSize` (already shipped as
+`GuiWidgetSetMinSize`, Round 3) DID reliably enforce their floor in
+every one of those same scenarios - ruling out a probe-methodology
+mistake and confirming this is a real, specific gap in how
+`BGroupLayout` itself uses `PreferredSize()`, not an error in the
+adapter's own pass-through call. **`GuiWidgetSetPreferredSize` is
+therefore a documented, accepted no-op on all three backends** -
+kept in the contract for API completeness/future toolkits rather than
+dropped, but with no working backend today. A real, humbling reminder
+of this project's own established discipline: a plausible-sounding
+capability claim - even one that survives header inspection and a
+direct object-level query - still needs a full, decisive behavioral
+probe before it's safe to ship as "real."
 
 ## Ownership and the quit model
 
